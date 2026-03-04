@@ -1,11 +1,39 @@
 from playwright.sync_api import sync_playwright
 import os
 import time
+import smtplib
+from email.message import EmailMessage
 
 VIVO_URL = "https://mve.vivo.com.br"
 
 
-def baixar_fatura(cpf: str, senha: str, pasta_destino: str):
+# =========================================
+# 📧 FUNÇÃO PARA ENVIAR E-MAIL COM PDF
+# =========================================
+def enviar_email(destinatario, caminho_pdf):
+    msg = EmailMessage()
+    msg["Subject"] = "Sua fatura Vivo"
+    msg["From"] = "SEU_EMAIL@gmail.com"  # <-- ALTERAR
+    msg["To"] = destinatario
+    msg.set_content("Segue em anexo sua fatura Vivo.")
+
+    with open(caminho_pdf, "rb") as f:
+        msg.add_attachment(
+            f.read(),
+            maintype="application",
+            subtype="pdf",
+            filename=os.path.basename(caminho_pdf),
+        )
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login("SEU_EMAIL@gmail.com", "SUA_SENHA_DE_APP")  # <-- ALTERAR
+        smtp.send_message(msg)
+
+
+# =========================================
+# 🔥 FUNÇÃO PRINCIPAL
+# =========================================
+def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False, slow_mo=100)
@@ -15,21 +43,14 @@ def baixar_fatura(cpf: str, senha: str, pasta_destino: str):
         page = context.new_page()
 
         try:
-            # ========================================
-            # 1️⃣ ACESSAR SITE E ESPERAR OAUTH
-            # ========================================
+
             print("➡️ Acessando portal Vivo...")
             page.goto(VIVO_URL, timeout=60000)
 
-            # Espera sair do oauth/logout
             page.wait_for_load_state("networkidle")
             page.wait_for_timeout(5000)
 
             print("🌐 URL após carregar:", page.url)
-
-            # ========================================
-            # 2️⃣ LOGIN
-            # ========================================
 
             cpf_limpo = cpf.strip()
             senha_limpa = senha.strip()
@@ -39,20 +60,17 @@ def baixar_fatura(cpf: str, senha: str, pasta_destino: str):
 
             print("✏️ Preenchendo CPF...")
             cpf_input = page.locator("input").first
-            cpf_input.click()
             cpf_input.fill("")
             cpf_input.type(cpf_limpo, delay=100)
 
             print("➡️ Clicando em continuar...")
             page.get_by_role("button", name="Continuar").click()
 
-            # 🔥 AGORA ESPERA A TRANSIÇÃO REAL
             print("⏳ Esperando campo senha aparecer...")
             page.wait_for_selector("input[type='password']", timeout=60000)
 
             print("🔐 Preenchendo senha...")
             senha_input = page.locator("input[type='password']").first
-            senha_input.click()
             senha_input.fill("")
             senha_input.type(senha_limpa, delay=100)
 
@@ -65,30 +83,37 @@ def baixar_fatura(cpf: str, senha: str, pasta_destino: str):
             print("✅ Login confirmado")
             print("🌐 URL após login:", page.url)
 
-            # ========================================
-            # 3️⃣ ABRIR MENU CONTAS
-            # ========================================
+            # =========================================
+            # 🔥 MENU CONTAS → ACESSAR FATURAS
+            # =========================================
+
             print("➡️ Abrindo menu Contas...")
 
-            # Garante que o menu principal carregou
             page.wait_for_selector("#menu-desktop-wrapper", timeout=60000)
 
-            # Clica apenas no item principal "Contas" dentro do menu
-            page.locator("#menu-desktop-wrapper >> span.menu-item-caption", has_text="Contas").first.click()
+            menu_contas = page.locator(
+                "#menu-desktop-wrapper span.menu-item-caption",
+                has_text="Contas"
+            ).first
 
-            page.wait_for_timeout(2000)
+            menu_contas.hover()
+            page.wait_for_timeout(1500)
 
-            # Agora clica na opção correta do submenu
-            page.locator("span.submenu-item-caption", has_text="Detalhes de contas e pagamentos").first.click()
+            print("➡️ Clicando em Acessar faturas...")
+
+            page.locator(
+                "li[data-nav-menu-dropdown-item='invoices']"
+            ).first.click()
 
             page.wait_for_load_state("networkidle")
             page.wait_for_timeout(4000)
 
-            print("🌐 URL após abrir contas:", page.url)
+            print("🌐 URL após acessar faturas:", page.url)
 
-            # ========================================
-            # 4️⃣ VERIFICAR STATUS
-            # ========================================
+            # =========================================
+            # 🔍 VERIFICAR STATUS DA FATURA
+            # =========================================
+
             print("🔄 Verificando status da fatura...")
 
             badges = page.locator(".badge p")
@@ -114,9 +139,6 @@ def baixar_fatura(cpf: str, senha: str, pasta_destino: str):
                 print("✅ Fatura paga ou isenta.")
                 return None
 
-            # ========================================
-            # 5️⃣ BAIXAR FATURA
-            # ========================================
             print("⚠️ Fatura em aberto. Baixando...")
 
             baixar_btn = page.locator("button:has-text('Baixar fatura')").first
@@ -136,6 +158,15 @@ def baixar_fatura(cpf: str, senha: str, pasta_destino: str):
             download.save_as(caminho)
 
             print(f"✅ Fatura salva em: {caminho}")
+
+            # =========================================
+            # 📧 ENVIO AUTOMÁTICO
+            # =========================================
+
+            print("📧 Enviando fatura por e-mail...")
+            enviar_email(email, caminho)
+            print("✅ E-mail enviado com sucesso!")
+
             return caminho
 
         except Exception as e:
