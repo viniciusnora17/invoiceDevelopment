@@ -2,9 +2,15 @@ from fastapi import FastAPI, Form, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from database import SessionLocal, engine, Base
-from models import Usuario, CredencialVivo
+
+from database import SessionLocal, engine
+from models import Usuario, CredenciaisVivo, Empresa
+from database import Base
+
+
+
 from baixar_fatura import baixar_fatura
+
 import os
 
 Base.metadata.create_all(bind=engine)
@@ -33,7 +39,7 @@ def index():
 # ---------------- NOVO CADASTRO ----------------
 @app.get("/novo", response_class=HTMLResponse)
 def novo():
-    with open("dados.html", "r", encoding="utf-8") as f:
+    with open("templates/dados.html", "r", encoding="utf-8") as f:
         return f.read()
 
 
@@ -43,217 +49,212 @@ def login_vivo(
     cpf: str = Form(...),
     senha: str = Form(...),
     name: str = Form(...),
+    email: str = Form(...),
+    cnpj: str = Form(...),
     db: Session = Depends(get_db)
 ):
+
     cpf_limpo = cpf.replace(".", "").replace("-", "")
 
-    # 🔎 Verifica se usuário já existe
+    # ---------------- USUARIO ----------------
     usuario = db.query(Usuario).filter(Usuario.cpf == cpf_limpo).first()
 
     if not usuario:
         usuario = Usuario(
             cpf=cpf_limpo,
-            name=name  
+            name=name
         )
         db.add(usuario)
         db.commit()
         db.refresh(usuario)
-    else:
-       
-        usuario.name = name
-        db.commit()
 
-   
-    credencial = db.query(CredencialVivo).filter(
-        CredencialVivo.usuario_id == usuario.id
+    # ---------------- CREDENCIAL ----------------
+    credencial = db.query(CredenciaisVivo).filter(
+        CredenciaisVivo.usuario_id == usuario.id
     ).first()
 
-    if credencial:
-        credencial.senha = senha
-    else:
-        credencial = CredencialVivo(
+    if not credencial:
+        credencial = CredenciaisVivo(
             usuario_id=usuario.id,
             cpf=cpf_limpo,
             name=name,
             senha=senha
         )
         db.add(credencial)
+    else:
+        credencial.senha = senha
+
+    # ---------------- EMPRESA ----------------
+    empresa = db.query(Empresa).filter(
+        Empresa.usuario_id == usuario.id,
+        Empresa.cnpj == cnpj
+    ).first()
+
+    if not empresa:
+        empresa = Empresa(
+            usuario_id=usuario.id,
+            cnpj=cnpj,
+            nome_empresa=name
+        )
+        db.add(empresa)
+        db.commit()
+        db.refresh(empresa)
 
     db.commit()
 
+    # ---------------- BAIXAR FATURA ----------------
     pasta = os.path.join("faturas", cpf_limpo)
 
     caminho_pdf = baixar_fatura(
-        cpf_limpo,
-        senha,
-        pasta
+         cpf_limpo,
+            senha,
+            email,
+            pasta
     )
 
     return {
-        "status": "login realizado",
+        "status": "ok",
+        "usuario_id": usuario.id,
+        "empresa_id": empresa.id,
         "pdf": caminho_pdf
     }
 
 
-
+# ---------------- LISTAR USUARIOS ----------------
 @app.get("/usuarios", response_class=HTMLResponse)
 def listar_usuarios(db: Session = Depends(get_db)):
 
     usuarios = db.query(Usuario).all()
 
-    html = """
-    <html>
-    <head>
-        <link rel="stylesheet" href="/static/style.css">
-        <style>
-            body {
-                margin:0;
-                background: linear-gradient(180deg, #f5faf8 0%, #eef5f2 100%);
-                font-family: "Segoe UI", sans-serif;
-                display:flex;
-                justify-content:center;
-                align-items:center;
-                min-height:100vh;
-            }
-
-            .container {
-                width:100%;
-                max-width:500px;
-                text-align:center;
-            }
-
-            h2 {
-                color:#0b2e24;
-            }
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum
-from sqlalchemy.orm import relationship
-from database import Base
-from datetime import datetime
-
-
-class Usuario(Base):
-    __tablename__ = "usuarios"
-
-    id = Column(Integer, primary_key=True, index=True)
-    cpf = Column(String, unique=True, index=True)
-    name = Column(String)
-
-    credencial = relationship("CredencialVivo", back_populates="usuario", uselist=False)
-    empresas = relationship("Empresa", back_populates="usuario")
-
-
-class CredencialVivo(Base):
-    __tablename__ = "credenciais_vivo"
-
-    id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
-    cpf = Column(String)
-    name=Column(String)
-    senha = Column(String)
-
-    usuario = relationship("Usuario", back_populates="credencial")
-
-
-class Empresa(Base):
-    __tablename__ = "empresas"
-
-    id = Column(Integer, primary_key=True)
-    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
-    cnpj = Column(String(18), nullable=False)
-    nome_empresa = Column(String(255))
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    usuario = relationship("Usuario", back_populates="empresas")
-    faturas = relationship("Fatura", back_populates="empresa")
-
-
-class Fatura(Base):
-    __tablename__ = "faturas"
-
-    id = Column(Integer, primary_key=True)
-    empresa_id = Column(Integer, ForeignKey("empresas.id"))
-    mes_referencia = Column(String(7))
-    status = Column(
-        Enum("paga", "aberta", "isenta", "erro", name="status_fatura")
-    )
-    caminho_pdf = Column(String(255))
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    empresa = relationship("Empresa", back_populates="faturas")
-            .user-card {
-                margin:12px 0;
-            }
-
-            .btn {
-                width:100%;
-                padding:14px;
-                border:none;
-                border-radius:12px;
-                background:#0b5f4b;
-                color:white;
-                font-size:16px;
-                cursor:pointer;
-            }
-
-            .btn:hover {
-                background:#094c3d;
-                color: white;
-            }
-
-            .secondary {
-                background:#cfdad6;
-                color:#0b2e24;
-            }
-
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h2>Usuários Cadastrados</h2>
-    """
+    botoes = ""
 
     for u in usuarios:
-        html += f"""
-            <div class="user-card">
-                <a href="/login-usuario/{u.id}">
-                    <button class="btn">
-                        {u.name if u.name else u.cpf}
-                    </button>
-                </a>
-            </div>
+        botoes += f"""
+        <div>
+            <a href="/login-usuario/{u.id}">
+                <button class="btn">
+                    {u.name if u.name else u.cpf}
+                </button>
+            </a>
+        </div>
         """
 
-    html += """
-            <br>
-            <a href="/"><button class="btn secondary">Voltar</button></a>
-        </div>
-    </body>
-    </html>
-    """
+    with open("templates/usuarios.html", "r", encoding="utf-8") as f:
+        html = f.read()
+
+    html = html.replace("<!-- USUARIOS -->", botoes)
 
     return html
 
 
-# ---------------- LOGIN AUTOMÁTICO ----------------
-@app.get("/login-usuario/{usuario_id}")
+
+# ---------------- LOGIN AUTOMATICO ----------------
+@app.get("/login-usuario/{usuario_id}", response_class=HTMLResponse)
 def login_usuario(usuario_id: int, db: Session = Depends(get_db)):
 
-    credencial = db.query(CredencialVivo).filter(
-        CredencialVivo.usuario_id == usuario_id
+    credencial = db.query(CredenciaisVivo).filter(
+        CredenciaisVivo.usuario_id == usuario_id
     ).first()
 
     if not credencial:
-        return {"erro": "Credencial não encontrada"}
+        return """
+        <h2>Erro</h2>
+        <p>Credencial não encontrada</p>
+        <a href="/"><button>Voltar ao início</button></a>
+        """
 
     pasta = os.path.join("faturas", credencial.cpf)
 
     caminho_pdf = baixar_fatura(
         credencial.cpf,
         credencial.senha,
+        credencial.email,
         pasta
     )
 
-    return {
-        "status": "login automático realizado",
-        "pdf": caminho_pdf
-    }
+    # ---------------- ERRO NO ROBÔ ----------------
+    if caminho_pdf == "erro":
+
+        return """
+        <html>
+        <head>
+            <link rel="stylesheet" href="/static/style.css">
+        </head>
+
+        <body>
+
+        <div class="container">
+
+            <h2>❌ Erro ao processar</h2>
+
+            <p>
+            Ocorreu um erro ao acessar o portal da Vivo.
+            </p>
+
+            <a href="/">
+                <button>Voltar ao início</button>
+            </a>
+
+        </div>
+
+        </body>
+        </html>
+        """
+
+    # ---------------- FATURA ENVIADA ----------------
+    elif caminho_pdf:
+
+        return """
+        <html>
+        <head>
+            <link rel="stylesheet" href="/static/style.css">
+        </head>
+
+        <body>
+
+        <div class="container">
+
+            <h2>✅ Fatura enviada!</h2>
+
+            <p>
+            A fatura foi enviada para o email cadastrado.
+            </p>
+
+            <a href="/">
+                <button>Voltar ao início</button>
+            </a>
+
+        </div>
+
+        </body>
+        </html>
+        """
+
+    # ---------------- CONTA JÁ PAGA ----------------
+    else:
+
+        return """
+        <html>
+        <head>
+            <link rel="stylesheet" href="/static/style.css">
+        </head>
+
+        <body>
+
+        <div class="container">
+
+            <h2>💳 Conta já está paga</h2>
+
+            <p>
+            Não existem faturas em aberto para este cliente.
+            </p>
+
+            <a href="/">
+                <button>Voltar ao início</button>
+            </a>
+
+        </div>
+
+        </body>
+        </html>
+        """

@@ -1,0 +1,37 @@
+body{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    font-family: 'Segoe UI', sans-serif;
+   background-color: #e9efec;
+    height: 80dvh;
+}
+
+.btn {
+    padding: 14px;
+    font-size: 15px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: 0.3s ease;
+    width: 100%;
+
+    color: #215C46;
+}
+
+.usuarios {
+    background: white;
+    padding: 30px;
+    border-radius: 16px;
+    width: 380px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.btn:hover{
+    background-color: #CDDAD5;
+}

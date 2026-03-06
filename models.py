@@ -8,21 +8,23 @@ class Usuario(Base):
     __tablename__ = "usuarios"
 
     id = Column(Integer, primary_key=True, index=True)
-    cpf = Column(String, unique=True, index=True)
-    name = Column(String)
+    cpf = Column(String(14), unique=True, index=True)
+    name = Column(String(100))
 
-    credencial = relationship("CredencialVivo", back_populates="usuario", uselist=False)
+    credencial = relationship("CredenciaisVivo", back_populates="usuario", uselist=False)
     empresas = relationship("Empresa", back_populates="usuario")
 
 
-class CredencialVivo(Base):
+class CredenciaisVivo(Base):
     __tablename__ = "credenciais_vivo"
 
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"))
-    cpf = Column(String)
-    name=Column(String)
-    senha = Column(String)
+
+    cpf = Column(String(14))
+    name = Column(String(100))
+    email = Column(String(100))
+    senha = Column(String(100))
 
     usuario = relationship("Usuario", back_populates="credencial")
 
@@ -46,9 +48,11 @@ class Fatura(Base):
     id = Column(Integer, primary_key=True)
     empresa_id = Column(Integer, ForeignKey("empresas.id"))
     mes_referencia = Column(String(7))
+
     status = Column(
         Enum("paga", "aberta", "isenta", "erro", name="status_fatura")
     )
+
     caminho_pdf = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
 

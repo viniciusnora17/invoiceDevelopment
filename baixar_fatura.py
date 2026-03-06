@@ -135,17 +135,24 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
 
             print("📄 Status encontrados:", status_texts)
 
-            if any("paga" in s or "isenta" in s for s in status_texts):
+            # verifica se existe fatura em aberto
+            if any(
+                "atrasada" in s
+                or "pronta pra pagar" in s
+                or "aberta" in s
+                for s in status_texts
+            ):
+                print("⚠️ Fatura em aberto. Baixando...")
+
+            else:
                 print("✅ Fatura paga ou isenta.")
                 return None
-
-            print("⚠️ Fatura em aberto. Baixando...")
 
             baixar_btn = page.locator("button:has-text('Baixar fatura')").first
             baixar_btn.wait_for(state="visible", timeout=30000)
             baixar_btn.click()
 
-            pdf_item = page.locator("a:has-text('Conta detalhada e nota fiscal')")
+            pdf_item = page.locator("a:has-text('Conta detalhada e nota fiscal')").first
             pdf_item.wait_for(state="visible", timeout=30000)
 
             with page.expect_download() as download_info:
@@ -159,9 +166,7 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
 
             print(f"✅ Fatura salva em: {caminho}")
 
-            # =========================================
-            # 📧 ENVIO AUTOMÁTICO
-            # =========================================
+  
 
             print("📧 Enviando fatura por e-mail...")
             enviar_email(email, caminho)
@@ -171,7 +176,7 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
 
         except Exception as e:
             print(f"❌ Erro inesperado: {e}")
-            return None
+            return "erro"
 
         finally:
             browser.close()
