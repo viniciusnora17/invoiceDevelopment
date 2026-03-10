@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Confirmar envio</title>
+    
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #e9efec;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 30px;
+            height: 120vh;
+        }
+
+        .btn{
+              padding: 14px;
+                font-size: 15px;
+                border-radius: 10px;
+                border: none;
+                cursor: pointer;
+                transition: 0.3s ease;
+                width: 100%;
+
+                color: #215C46;
+        }
+
+        .btn:hover{
+            background-color: #CDDAD5;
+        }
+
+        .card{
+               background: white;
+                padding: 30px;
+                border-radius: 16px;
+                width: 1400px;
+                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+                display: flex;
+                align-items: center;
+                flex-direction: column;
+                gap: 20px;
+        }
+    </style>
+</head>
+<body>
+<div style="display: flex; flex-direction: column; align-items: center;">
+    <h2>Fatura baixada com sucesso</h2>
+    
+    <p>Confira a fatura antes de enviar:</p>
+</div>
+
+<div class="card">
+    <iframe src="{{pdf}}" width="1200" height="600"></iframe>
+    
+    <form action="/enviar-email" method="post">
+        <input type="hidden" name="pdf" value="{{pdf}}">
+        <input type="hidden" name="email" value="{{email}}">
+    
+        <button type="submit" class="btn">Confirmar envio do email</button>
+    </form>
+</div>
+
+<a href="/">Voltar ao início</a>
+</body>
+</html>

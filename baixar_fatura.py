@@ -13,7 +13,7 @@ VIVO_URL = "https://mve.vivo.com.br"
 def enviar_email(destinatario, caminho_pdf):
     msg = EmailMessage()
     msg["Subject"] = "Sua fatura Vivo"
-    msg["From"] = "SEU_EMAIL@gmail.com"  # <-- ALTERAR
+    msg["From"] = "SEU_EMAIL@gmail.com"
     msg["To"] = destinatario
     msg.set_content("Segue em anexo sua fatura Vivo.")
 
@@ -26,7 +26,7 @@ def enviar_email(destinatario, caminho_pdf):
         )
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login("SEU_EMAIL@gmail.com", "SUA_SENHA_DE_APP")  # <-- ALTERAR
+        smtp.login("SEU_EMAIL@gmail.com", "SUA_SENHA_DE_APP")
         smtp.send_message(msg)
 
 
@@ -38,8 +38,6 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False, slow_mo=100)
         context = browser.new_context(accept_downloads=True)
-        context.clear_cookies()
-
         page = context.new_page()
 
         try:
@@ -83,10 +81,6 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
             print("✅ Login confirmado")
             print("🌐 URL após login:", page.url)
 
-            # =========================================
-            # 🔥 MENU CONTAS → ACESSAR FATURAS
-            # =========================================
-
             print("➡️ Abrindo menu Contas...")
 
             page.wait_for_selector("#menu-desktop-wrapper", timeout=60000)
@@ -110,10 +104,6 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
 
             print("🌐 URL após acessar faturas:", page.url)
 
-            # =========================================
-            # 🔍 VERIFICAR STATUS DA FATURA
-            # =========================================
-
             print("🔄 Verificando status da fatura...")
 
             badges = page.locator(".badge p")
@@ -135,7 +125,6 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
 
             print("📄 Status encontrados:", status_texts)
 
-            # verifica se existe fatura em aberto
             if any(
                 "atrasada" in s
                 or "pronta pra pagar" in s
@@ -143,34 +132,78 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
                 for s in status_texts
             ):
                 print("⚠️ Fatura em aberto. Baixando...")
-
             else:
                 print("✅ Fatura paga ou isenta.")
                 return None
+
+            # =========================================
+            # BAIXAR FATURA
+            # =========================================
 
             baixar_btn = page.locator("button:has-text('Baixar fatura')").first
             baixar_btn.wait_for(state="visible", timeout=30000)
             baixar_btn.click()
 
-            pdf_item = page.locator("a:has-text('Conta detalhada e nota fiscal')").first
-            pdf_item.wait_for(state="visible", timeout=30000)
+            page.wait_for_selector(
+                "a:has-text('Conta detalhada e nota fiscal')",
+                timeout=30000
+            )
 
-            with page.expect_download() as download_info:
-                pdf_item.click()
+            page.wait_for_timeout(3000)
 
-            download = download_info.value
+            pdf_item = page.locator(
+                "a:has-text('Conta detalhada e nota fiscal')"
+            ).first
+
+            print("⬇️ Iniciando download da fatura...")
 
             os.makedirs(pasta_destino, exist_ok=True)
-            caminho = os.path.join(pasta_destino, download.suggested_filename)
-            download.save_as(caminho)
 
-            print(f"✅ Fatura salva em: {caminho}")
+            try:
 
-  
+                with page.expect_download(timeout=20000) as download_info:
+                    pdf_item.click()
 
-            print("📧 Enviando fatura por e-mail...")
-            enviar_email(email, caminho)
-            print("✅ E-mail enviado com sucesso!")
+                download = download_info.value
+
+                caminho = os.path.abspath(
+                    os.path.join(pasta_destino, download.suggested_filename)
+                )
+
+                download.save_as(caminho)
+
+            except Exception:
+
+                print("⚠️ Download direto falhou. Reabrindo menu...")
+
+                baixar_btn.click()
+
+                page.wait_for_selector(
+                    "a:has-text('Conta detalhada e nota fiscal')",
+                    timeout=10000
+                )
+
+                pdf_item = page.locator(
+                    "a:has-text('Conta detalhada e nota fiscal')"
+                ).first
+
+                with context.expect_page() as new_page_info:
+                    pdf_item.click()
+
+                pdf_page = new_page_info.value
+                pdf_page.wait_for_load_state()
+
+                caminho = os.path.abspath(
+                    os.path.join(pasta_destino, "fatura_vivo.pdf")
+                )
+
+                pdf_url = pdf_page.url
+                pdf_bytes = context.request.get(pdf_url).body()
+
+                with open(caminho, "wb") as f:
+                    f.write(pdf_bytes)
+
+            print("📂 Arquivo salvo em:", caminho)
 
             return caminho
 
