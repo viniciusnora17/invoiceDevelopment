@@ -1,17 +1,26 @@
 import yagmail
+from jinja2 import Environment, FileSystemLoader
 
 EMAIL_REMETENTE = "vnora@everco.com.br"
 SENHA_APP = "jvnr gozp ghin ushl"
 
-def enviar_email(destinatario, arquivo_pdf):
+env = Environment(loader=FileSystemLoader("templates"))
+
+def enviar_email(destinatario, arquivo_pdf, nome):
+
+    template = env.get_template("email_fatura.html")
+
+    html = template.render(
+        nome=nome
+    )
 
     yag = yagmail.SMTP(EMAIL_REMETENTE, SENHA_APP)
 
     yag.send(
         to=destinatario,
-        subject="Fatura Vivo",
-        contents="Segue sua fatura da Vivo em anexo.",
+        subject="Sua fatura Vivo",
+        contents=[html],
         attachments=arquivo_pdf
     )
 
-    print(f"📧 Email enviado para {destinatario}")
+    print(f"Email enviado para {destinatario}")

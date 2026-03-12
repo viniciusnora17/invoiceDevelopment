@@ -149,7 +149,7 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
                 timeout=30000
             )
 
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(5000)
 
             pdf_item = page.locator(
                 "a:has-text('Conta detalhada e nota fiscal')"
@@ -159,49 +159,16 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
 
             os.makedirs(pasta_destino, exist_ok=True)
 
-            try:
+            with page.expect_download(timeout=120000) as download_info:
+                pdf_item.click()
 
-                with page.expect_download(timeout=20000) as download_info:
-                    pdf_item.click()
+            download = download_info.value
 
-                download = download_info.value
+            caminho = os.path.abspath(
+                os.path.join(pasta_destino, download.suggested_filename)
+            )
 
-                caminho = os.path.abspath(
-                    os.path.join(pasta_destino, download.suggested_filename)
-                )
-
-                download.save_as(caminho)
-
-            except Exception:
-
-                print("⚠️ Download direto falhou. Reabrindo menu...")
-
-                baixar_btn.click()
-
-                page.wait_for_selector(
-                    "a:has-text('Conta detalhada e nota fiscal')",
-                    timeout=10000
-                )
-
-                pdf_item = page.locator(
-                    "a:has-text('Conta detalhada e nota fiscal')"
-                ).first
-
-                with context.expect_page() as new_page_info:
-                    pdf_item.click()
-
-                pdf_page = new_page_info.value
-                pdf_page.wait_for_load_state()
-
-                caminho = os.path.abspath(
-                    os.path.join(pasta_destino, "fatura_vivo.pdf")
-                )
-
-                pdf_url = pdf_page.url
-                pdf_bytes = context.request.get(pdf_url).body()
-
-                with open(caminho, "wb") as f:
-                    f.write(pdf_bytes)
+            download.save_as(caminho)
 
             print("📂 Arquivo salvo em:", caminho)
 

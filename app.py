@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
 from models import Usuario, CredenciaisVivo, Empresa
 
-from baixar_fatura import baixar_fatura, enviar_email
+from baixar_fatura import baixar_fatura
+from email_service import enviar_email
 
 import os
 
@@ -105,12 +106,27 @@ def login_vivo(
 
     pasta = os.path.join("faturas", cpf_limpo)
 
-    caminho_pdf = baixar_fatura(
-        cpf_limpo,
-        senha,
-        email,
-        pasta
-    )
+    try:
+
+        print("Iniciando download da fatura...")
+
+        caminho_pdf = baixar_fatura(
+            cpf_limpo,
+            senha,
+            email,
+            pasta
+        )
+
+        print("Download finalizado:", caminho_pdf)
+
+    except Exception as e:
+
+        print("ERRO AO BAIXAR FATURA:", e)
+
+        return templates.TemplateResponse(
+            "status.html",
+            {"request": request, "mensagem": "Erro ao baixar fatura"}
+        )
 
     if caminho_pdf == "erro":
         return templates.TemplateResponse(
@@ -129,11 +145,13 @@ def login_vivo(
         {
             "request": request,
             "pdf": "/faturas/" + os.path.basename(os.path.dirname(caminho_pdf)) + "/" + os.path.basename(caminho_pdf),
-            "email": email
+            "email": email,
+            "nome": name
         }
     )
 
 
+# ---------------- LISTAR USUARIOS ----------------
 @app.get("/usuarios", response_class=HTMLResponse)
 def listar_usuarios(db: Session = Depends(get_db)):
 
@@ -146,8 +164,7 @@ def listar_usuarios(db: Session = Depends(get_db)):
         <div class="usuario-card">
 
             <div class="usuario-info">
-                <strong>{u.name if u.name else "Sem nome"}</strong><br>
-
+                <strong>{u.name if u.name else "Sem nome"}</strong>
             </div>
 
             <div class="acoes">
@@ -178,6 +195,7 @@ def listar_usuarios(db: Session = Depends(get_db)):
 
     return html
 
+
 # ---------------- DELETAR USUARIO ----------------
 @app.get("/deletar-usuario/{usuario_id}")
 def deletar_usuario(usuario_id: int, db: Session = Depends(get_db)):
@@ -204,6 +222,7 @@ def deletar_usuario(usuario_id: int, db: Session = Depends(get_db)):
         <a href="/usuarios">Voltar</a>
     """)
 
+
 # ---------------- EDITAR USUARIO ----------------
 @app.get("/editar-usuario/{usuario_id}", response_class=HTMLResponse)
 def editar_usuario(usuario_id: int, db: Session = Depends(get_db)):
@@ -220,12 +239,9 @@ def editar_usuario(usuario_id: int, db: Session = Depends(get_db)):
     <!DOCTYPE html>
     <html>
     <head>
-
     <meta charset="UTF-8">
     <title>Editar Usuário</title>
-
     <link rel="stylesheet" href="/static/usuarios.css">
-
     </head>
 
     <body>
@@ -234,59 +250,26 @@ def editar_usuario(usuario_id: int, db: Session = Depends(get_db)):
 
     <h2>Editar Usuário</h2>
 
-    <form method="post" style="display: flex; flex-direction: column; gap: 25px; background: white;
-    padding: 30px;
-    border-radius: 16px;
-    width: 400px;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);" action="/salvar-edicao/{usuario_id}">
+    <form method="post" action="/salvar-edicao/{usuario_id}" style="display:flex;flex-direction:column;gap:25px;background:white;padding:30px;border-radius:16px;width:400px;box-shadow:0 8px 25px rgba(0,0,0,0.08);">
 
-    <div style="display: flex; flex-direction: column;">
-        <label style="font-weight: bold;">Nome</label>
-        <input style="width: 100%;
-            padding: 12px 6px 12px 6px;
-            border-radius: 10px;
-            border: 1px solid #d9e5e0;
-            font-size: 14px;
-            outline: none;" type="text" name="name" value="{usuario.name}">
-    </div>
+        <label>Nome</label>
+        <input type="text" name="name" value="{usuario.name}">
 
-    <div style="display: flex; flex-direction: column;">
-        <label style="font-weight: bold;">CPF</label>
-        <input style="width: 100%;
-            padding: 12px 6px 12px 6px;
-            border-radius: 10px;
-            border: 1px solid #d9e5e0;
-            font-size: 14px;
-            outline: none;" type="text" name="cpf" value="{usuario.cpf}">
-    </div>
+        <label>CPF</label>
+        <input type="text" name="cpf" value="{usuario.cpf}">
 
-    <div style="display: flex; flex-direction: column;">
-        <label style="font-weight: bold;">Email</label>
-        <input style="width: 100%;
-            padding: 12px 6px 12px 6px;
-            border-radius: 10px;
-            border: 1px solid #d9e5e0;
-            font-size: 14px;
-            outline: none;" type="text" name="email" value="{credencial.email}">
-    </div>
+        <label>Email</label>
+        <input type="text" name="email" value="{credencial.email}">
 
-    <div style="display: flex; flex-direction: column;">
-        <label style="font-weight: bold;">Senha Vivo</label>
-        <input style="width: 100%;
-            padding: 12px 6px 12px 6px;
-            border-radius: 10px;
-            border: 1px solid #d9e5e0;
-            font-size: 14px;
-            outline: none;" type="text" name="senha" value="{credencial.senha}">
-    </div>
+        <label>Senha Vivo</label>
+        <input type="text" name="senha" value="{credencial.senha}">
 
-    <button type="submit" class="btn">Salvar</button>
+        <button type="submit" style="background:#0069D9;color:white;padding:10px;border:none;border-radius:8px;">Salvar</button>
 
     </form>
 
     <br>
-
-    <a href="/usuarios" style="color: black;">Voltar</a>
+    <a href="/usuarios">Voltar</a>
 
     </div>
 
@@ -295,6 +278,7 @@ def editar_usuario(usuario_id: int, db: Session = Depends(get_db)):
     """
 
     return HTMLResponse(html)
+
 
 @app.post("/salvar-edicao/{usuario_id}")
 def salvar_edicao(
@@ -324,6 +308,7 @@ def salvar_edicao(
         <a href="/usuarios">Voltar</a>
     """)
 
+
 # ---------------- LOGIN AUTOMATICO ----------------
 @app.get("/login-usuario/{usuario_id}")
 def login_usuario(usuario_id: int, request: Request, db: Session = Depends(get_db)):
@@ -337,12 +322,27 @@ def login_usuario(usuario_id: int, request: Request, db: Session = Depends(get_d
 
     pasta = os.path.join("faturas", credencial.cpf)
 
-    caminho_pdf = baixar_fatura(
-        credencial.cpf,
-        credencial.senha,
-        credencial.email,
-        pasta
-    )
+    try:
+
+        print("Iniciando download da fatura...")
+
+        caminho_pdf = baixar_fatura(
+            credencial.cpf,
+            credencial.senha,
+            credencial.email,
+            pasta
+        )
+
+        print("Download finalizado:", caminho_pdf)
+
+    except Exception as e:
+
+        print("ERRO AO BAIXAR FATURA:", e)
+
+        return templates.TemplateResponse(
+            "status.html",
+            {"request": request, "mensagem": "Erro ao baixar fatura"}
+        )
 
     if caminho_pdf == "erro":
         return templates.TemplateResponse(
@@ -357,13 +357,14 @@ def login_usuario(usuario_id: int, request: Request, db: Session = Depends(get_d
         )
 
     return templates.TemplateResponse(
-    "confirmar.html",
-    {
-        "request": request,
-        "pdf": "/faturas/" + os.path.basename(os.path.dirname(caminho_pdf)) + "/" + os.path.basename(caminho_pdf),
-        "email": credencial.email
-    }
-)
+        "confirmar.html",
+        {
+            "request": request,
+            "pdf": "/faturas/" + os.path.basename(os.path.dirname(caminho_pdf)) + "/" + os.path.basename(caminho_pdf),
+            "email": credencial.email,
+            "nome": credencial.name
+        }
+    )
 
 
 # ---------------- ENVIAR EMAIL ----------------
@@ -371,14 +372,27 @@ def login_usuario(usuario_id: int, request: Request, db: Session = Depends(get_d
 def enviar_email_rota(
     request: Request,
     pdf: str = Form(...),
-    email: str = Form(...)
+    email: str = Form(...),
+    nome: str = Form(...)
 ):
 
-    caminho = pdf.lstrip("/").replace("/", os.sep)
+    print("PDF recebido:", pdf)
+    print("EMAIL recebido:", email)
+    print("NOME recebido:", nome)
 
-    enviar_email(email, caminho)
+    if not email:
+        return templates.TemplateResponse(
+            "status.html",
+            {
+                "request": request,
+                "mensagem": "Email inválido"
+            }
+        )
 
-    # apaga pdf depois de enviar
+    caminho = os.path.join(os.getcwd(), pdf.lstrip("/"))
+
+    enviar_email(email, caminho, nome)
+
     if os.path.exists(caminho):
         os.remove(caminho)
 
