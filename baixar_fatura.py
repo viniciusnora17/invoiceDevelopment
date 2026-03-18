@@ -46,14 +46,13 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
             page.goto(VIVO_URL, timeout=60000)
 
             page.wait_for_load_state("networkidle")
-            page.wait_for_timeout(5000)
 
             print("🌐 URL após carregar:", page.url)
 
             cpf_limpo = cpf.strip()
             senha_limpa = senha.strip()
 
-            print("⏳ Aguardando campo CPF real...")
+            print("⏳ Aguardando campo CPF...")
             page.wait_for_selector("input", timeout=30000)
 
             print("✏️ Preenchendo CPF...")
@@ -64,7 +63,7 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
             print("➡️ Clicando em continuar...")
             page.get_by_role("button", name="Continuar").click()
 
-            print("⏳ Esperando campo senha aparecer...")
+            print("⏳ Esperando campo senha...")
             page.wait_for_selector("input[type='password']", timeout=60000)
 
             print("🔐 Preenchendo senha...")
@@ -81,6 +80,86 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
             print("✅ Login confirmado")
             print("🌐 URL após login:", page.url)
 
+            # =========================================
+            # 🔥 BLOCO INTELIGENTE - SELETOR DE EMPRESA
+            # =========================================
+            print("➡️ Aguardando seletor de empresa...")
+
+            page.wait_for_selector("[data-e2e-header-customer-box]", timeout=60000)
+
+            nome_empresa = "ARTUR MARCHI DE SOUZA"
+
+            print("🔍 Verificando empresa atual...")
+
+            empresa_atual = page.locator("[data-e2e-header-customer-box]").first.inner_text().strip()
+
+            print("🏢 Empresa atual:", empresa_atual)
+
+            empresa_atual_lower = empresa_atual.lower()
+            nome_empresa_lower = nome_empresa.lower()
+            cnpj_limpo = ''.join(filter(str.isdigit, cpf))
+
+            if nome_empresa_lower in empresa_atual_lower or cnpj_limpo in empresa_atual:
+                print("✅ Já está na empresa correta, não precisa trocar")
+
+            else:
+                print("🔄 Empresa diferente, abrindo seletor...")
+
+                seletor_empresa = page.locator("[data-e2e-header-customer-box]").first
+                seletor_empresa.wait_for(state="visible", timeout=30000)
+                seletor_empresa.click()
+
+                print("✅ Seletor de empresa aberto")
+
+                page.wait_for_timeout(2000)
+
+                print("🔍 Selecionando empresa automaticamente...")
+
+                def formatar_cnpj(cnpj):
+                    cnpj = ''.join(filter(str.isdigit, cnpj))
+                    return f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}"
+
+                cnpj_alvo = formatar_cnpj(cpf)
+
+                page.wait_for_selector("[data-customer-select-slider-list]", timeout=30000)
+
+                print(f"🔎 Buscando por nome: {nome_empresa}")
+
+                empresa_bloco = page.locator(
+                    "[data-slide-target]",
+                    has=page.locator("[data-test-company-name]", has_text=nome_empresa)
+                ).first
+
+                if empresa_bloco.count() > 0:
+                    print("✅ Encontrado pelo NOME")
+                    empresa_bloco.locator("[data-test-customer]").first.click()
+
+                else:
+                    print("⚠️ Nome não encontrado, tentando pelo CNPJ...")
+
+                    lista = page.locator("[data-test-customer]")
+                    encontrado = False
+
+                    for i in range(lista.count()):
+                        texto = lista.nth(i).inner_text().strip()
+
+                        if cnpj_alvo in texto:
+                            print("✅ Encontrado pelo CNPJ")
+                            lista.nth(i).click()
+                            encontrado = True
+                            break
+
+                    if not encontrado:
+                        print("⚠️ Não encontrou nada, selecionando primeira empresa")
+                        lista.first.click()
+
+                page.wait_for_load_state("networkidle")
+
+                print("✅ Empresa selecionada")
+
+            # =========================================
+            # MENU CONTAS
+            # =========================================
             print("➡️ Abrindo menu Contas...")
 
             page.wait_for_selector("#menu-desktop-wrapper", timeout=60000)
@@ -91,7 +170,7 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
             ).first
 
             menu_contas.hover()
-            page.wait_for_timeout(1500)
+            page.wait_for_timeout(1000)
 
             print("➡️ Clicando em Acessar faturas...")
 
@@ -100,10 +179,12 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
             ).first.click()
 
             page.wait_for_load_state("networkidle")
-            page.wait_for_timeout(4000)
 
             print("🌐 URL após acessar faturas:", page.url)
 
+            # =========================================
+            # VERIFICAR STATUS
+            # =========================================
             print("🔄 Verificando status da fatura...")
 
             badges = page.locator(".badge p")
@@ -139,7 +220,6 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
             # =========================================
             # BAIXAR FATURA
             # =========================================
-
             baixar_btn = page.locator("button:has-text('Baixar fatura')").first
             baixar_btn.wait_for(state="visible", timeout=30000)
             baixar_btn.click()
@@ -148,8 +228,6 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
                 "a:has-text('Conta detalhada e nota fiscal')",
                 timeout=30000
             )
-
-            page.wait_for_timeout(5000)
 
             pdf_item = page.locator(
                 "a:has-text('Conta detalhada e nota fiscal')"

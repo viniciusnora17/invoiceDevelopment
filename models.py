@@ -4,6 +4,16 @@ from database import Base
 from datetime import datetime
 
 
+class EmailDestino(Base):
+    __tablename__ = "emails_destino"
+
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
+    email = Column(String(100), nullable=False)
+
+    usuario = relationship("Usuario", back_populates="emails")
+
+
 class Usuario(Base):
     __tablename__ = "usuarios"
 
@@ -13,6 +23,7 @@ class Usuario(Base):
 
     credencial = relationship("CredenciaisVivo", back_populates="usuario", uselist=False)
     empresas = relationship("Empresa", back_populates="usuario")
+    emails = relationship("EmailDestino", back_populates="usuario")
 
 
 class CredenciaisVivo(Base):

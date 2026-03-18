@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Editar Usuário</title>
+</head>
+<style>
+     * {
+            box-sizing: border-box;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #f5faf8 0%, #eef5f2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+        }
+
+
+        h1 {
+            margin: 0;
+            font-size: 32px;
+            font-weight: 500;
+            color: #0b2e24;
+        }
+
+
+        .card {
+            background-color: #ffffff;
+            border-radius: 16px;
+            padding: 28px 24px;
+            width: 420px;
+            height: 60dvh;
+            margin-top: 28px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06);
+            text-align: left;
+        }
+
+        label{
+            font-size: 16px;
+            color: #1f3d34;
+            font-weight: bold;
+            
+        }
+    
+
+        .btn {
+            width: 60%;
+            border: none;
+            background-color: #0b5f4b;
+            color: #ffffff;
+            font-size: 16px;
+            padding: 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background-color: #094c3d;
+        }
+
+        .footer-text {
+            margin-top: 18px;
+            font-size: 13px;
+            color: #6c8a81;
+            text-align: center;
+        }
+
+        form{
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+        }
+
+        input{
+            width: 100%;
+            padding: 12px 14px 12px 12px;
+            border-radius: 10px;
+            border: 1px solid #d9e5e0;
+            font-size: 14px;
+            outline: none;
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 22px;
+            }
+
+            .card {
+                padding: 22px 18px;
+            }
+        }
+</style>
+<body>
+
+<h2>Editar Usuário</h2>
+
+<form class="card" action="/salvar-edicao" method="post">
+
+    <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+
+    <div>
+        <label>Nome</label><br>
+        <input type="text" name="name" value="{{ usuario.name }}">
+    </div>
+
+    <div>
+        <label>Email(s)</label><br>
+        <input type="text" name="email" value="{{ emails }}">
+    </div>
+
+    <div>
+        <label>CNPJ</label><br>
+        <input type="text" name="cnpj" value="{{ empresa.cnpj }}">
+    </div>
+
+    <div>
+        <label>Senha da Vivo</label><br>
+        <input type="text" name="senha" value="{{ credencial.senha }}">
+    </div>
+
+    <button class="btn" type="submit">Salvar</button>
+
+</form>
+
+<br>
+
+<a href="/usuarios">Voltar</a>
+
+</body>
+</html>

@@ -24,7 +24,6 @@
                 cursor: pointer;
                 transition: 0.3s ease;
                 width: 100%;
-
                 color: #215C46;
         }
 
@@ -45,25 +44,39 @@
         }
     </style>
 </head>
+
 <body>
+
 <div style="display: flex; flex-direction: column; align-items: center;">
     <h2>Fatura baixada com sucesso</h2>
-    
     <p>Confira a fatura antes de enviar:</p>
 </div>
 
 <div class="card">
+
     <iframe src="{{pdf}}" width="1200" height="600"></iframe>
     
     <form action="/enviar-email" method="post">
-        <input type="hidden" name="pdf" value="{{pdf}}">
-        <input type="hidden" name="email" value="{{email}}">
-        <input type="hidden" name="nome" value="{{nome}}">
-    
-        <button type="submit" class="btn">Confirmar envio do email</button>
+
+    <input type="hidden" name="pdf" value="{{pdf}}">
+    <input type="hidden" name="email" value="{{email}}">
+    <input type="hidden" name="nome" value="{{nome}}">
+
+    <input type="hidden" name="valor" value="{{valor}}">
+    <input type="hidden" name="data" value="{{data}}">
+    <input type="hidden" name="linha" value="{{linha}}">
+    <input type="hidden" name="mes" value="{{mes}}">
+    <input type="hidden" name="empresa" value="{{empresa}}">
+
+    <button type="submit" class="btn">
+    Confirmar envio do email
+    </button>
+
     </form>
+
 </div>
 
 <a href="/">Voltar ao início</a>
+
 </body>
 </html>

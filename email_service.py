@@ -6,19 +6,24 @@ SENHA_APP = "jvnr gozp ghin ushl"
 
 env = Environment(loader=FileSystemLoader("templates"))
 
-def enviar_email(destinatario, arquivo_pdf, nome):
+def enviar_email(destinatario, arquivo_pdf, nome, valor, data, linha, mes, empresa):
 
     template = env.get_template("email_fatura.html")
 
     html = template.render(
-        nome=nome
+        nome=nome,
+        valor=valor,
+        data=data,
+        linha=linha,
+        mes=mes,
+        empresa=empresa
     )
 
     yag = yagmail.SMTP(EMAIL_REMETENTE, SENHA_APP)
 
     yag.send(
         to=destinatario,
-        subject="Sua fatura Vivo",
+        subject=f"Fatura Vivo - {empresa}",
         contents=[html],
         attachments=arquivo_pdf
     )

@@ -5,10 +5,12 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, engine, Base
-from models import Usuario, CredenciaisVivo, Empresa
+from models import Usuario, CredenciaisVivo, Empresa, EmailDestino
 
 from baixar_fatura import baixar_fatura
 from email_service import enviar_email
+
+from extrair_dados_fatura import extrair_dados_fatura
 
 import os
 
@@ -69,7 +71,36 @@ def login_vivo(
         db.add(usuario)
         db.commit()
         db.refresh(usuario)
+    else:
+        usuario.name = name
+        db.commit()
 
+    # -------- MULTIPLOS EMAILS --------
+    lista_emails = email.split(",")
+
+    for e in lista_emails:
+        e = e.strip()
+
+        if not e:
+            continue
+
+        email_existente = db.query(EmailDestino).filter(
+            EmailDestino.usuario_id == usuario.id,
+            EmailDestino.email == e
+        ).first()
+
+        if not email_existente:
+            novo_email = EmailDestino(
+                usuario_id=usuario.id,
+                email=e
+            )
+            db.add(novo_email)
+
+    db.commit()
+
+    email_principal = lista_emails[0].strip()
+
+    # -------- CREDENCIAIS --------
     credencial = db.query(CredenciaisVivo).filter(
         CredenciaisVivo.usuario_id == usuario.id
     ).first()
@@ -80,13 +111,14 @@ def login_vivo(
             cpf=cpf_limpo,
             name=name,
             senha=senha,
-            email=email
+            email=email_principal
         )
         db.add(credencial)
     else:
         credencial.senha = senha
-        credencial.email = email
+        credencial.email = email_principal
 
+    # -------- EMPRESA --------
     empresa = db.query(Empresa).filter(
         Empresa.usuario_id == usuario.id,
         Empresa.cnpj == cnpj
@@ -99,63 +131,21 @@ def login_vivo(
             nome_empresa=name
         )
         db.add(empresa)
-        db.commit()
-        db.refresh(empresa)
 
     db.commit()
 
-    pasta = os.path.join("faturas", cpf_limpo)
-
-    try:
-
-        print("Iniciando download da fatura...")
-
-        caminho_pdf = baixar_fatura(
-            cpf_limpo,
-            senha,
-            email,
-            pasta
-        )
-
-        print("Download finalizado:", caminho_pdf)
-
-    except Exception as e:
-
-        print("ERRO AO BAIXAR FATURA:", e)
-
-        return templates.TemplateResponse(
-            "status.html",
-            {"request": request, "mensagem": "Erro ao baixar fatura"}
-        )
-
-    if caminho_pdf == "erro":
-        return templates.TemplateResponse(
-            "status.html",
-            {"request": request, "mensagem": "Erro ao acessar portal da Vivo"}
-        )
-
-    if caminho_pdf is None:
-        return templates.TemplateResponse(
-            "status.html",
-            {"request": request, "mensagem": "Conta já está paga"}
-        )
-
-    return templates.TemplateResponse(
-        "confirmar.html",
-        {
-            "request": request,
-            "pdf": "/faturas/" + os.path.basename(os.path.dirname(caminho_pdf)) + "/" + os.path.basename(caminho_pdf),
-            "email": email,
-            "nome": name
-        }
-    )
-
-
+    # 🔥 AGORA APENAS CONFIRMA CADASTRO
+    return HTMLResponse("""
+        <script>
+            alert("Usuário cadastrado com sucesso!");
+            window.location.href = "/usuarios";
+        </script>
+    """)
 # ---------------- LISTAR USUARIOS ----------------
 @app.get("/usuarios", response_class=HTMLResponse)
 def listar_usuarios(db: Session = Depends(get_db)):
 
-    usuarios = db.query(Usuario).all()
+    usuarios = db.query(Usuario).order_by(Usuario.id.desc()).all()
 
     botoes = ""
 
@@ -195,6 +185,107 @@ def listar_usuarios(db: Session = Depends(get_db)):
 
     return html
 
+# ---------------- EDITAR USUARIO ----------------
+@app.get("/editar-usuario/{usuario_id}", response_class=HTMLResponse)
+def editar_usuario(usuario_id: int, request: Request, db: Session = Depends(get_db)):
+
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+
+    if not usuario:
+        return HTMLResponse("<h2>Usuário não encontrado</h2>")
+
+    credencial = db.query(CredenciaisVivo).filter(
+        CredenciaisVivo.usuario_id == usuario_id
+    ).first()
+
+    empresa = db.query(Empresa).filter(
+        Empresa.usuario_id == usuario_id
+    ).first()
+
+    emails = db.query(EmailDestino).filter(
+        EmailDestino.usuario_id == usuario_id
+    ).all()
+
+    lista_emails = ", ".join([e.email for e in emails])
+
+    return templates.TemplateResponse(
+        "editar_usuario.html",
+        {
+            "request": request,
+            "usuario": usuario,
+            "credencial": credencial,
+            "empresa": empresa,
+            "emails": lista_emails
+        }
+    )
+
+
+# ---------------- SALVAR EDICAO ----------------
+@app.post("/salvar-edicao")
+def salvar_edicao(
+    usuario_id: int = Form(...),
+    name: str = Form(...),
+    email: str = Form(...),
+    senha: str = Form(...),
+    cnpj: str = Form(...),
+    db: Session = Depends(get_db)
+):
+
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+
+    if not usuario:
+        return HTMLResponse("<h2>Usuário não encontrado</h2>")
+
+    usuario.name = name
+
+    # -------- ATUALIZAR EMAILS --------
+    db.query(EmailDestino).filter(
+        EmailDestino.usuario_id == usuario_id
+    ).delete()
+
+    lista_emails = email.split(",")
+
+    for e in lista_emails:
+
+        e = e.strip()
+
+        if not e:
+            continue
+
+        novo_email = EmailDestino(
+            usuario_id=usuario_id,
+            email=e
+        )
+
+        db.add(novo_email)
+
+    # -------- ATUALIZAR CREDENCIAIS --------
+    credencial = db.query(CredenciaisVivo).filter(
+        CredenciaisVivo.usuario_id == usuario_id
+    ).first()
+
+    if credencial:
+        credencial.senha = senha
+        credencial.email = lista_emails[0].strip()
+
+    # -------- ATUALIZAR EMPRESA --------
+    empresa = db.query(Empresa).filter(
+        Empresa.usuario_id == usuario_id
+    ).first()
+
+    if empresa:
+        empresa.cnpj = cnpj
+        empresa.nome_empresa = name
+
+    db.commit()
+
+    return HTMLResponse("""
+        <script>
+            alert("Usuário atualizado com sucesso!");
+            window.location.href = "/usuarios";
+        </script>
+    """)
+
 
 # ---------------- DELETAR USUARIO ----------------
 @app.get("/deletar-usuario/{usuario_id}")
@@ -213,98 +304,16 @@ def deletar_usuario(usuario_id: int, db: Session = Depends(get_db)):
         Empresa.usuario_id == usuario_id
     ).delete()
 
+    db.query(EmailDestino).filter(
+        EmailDestino.usuario_id == usuario_id
+    ).delete()
+
     db.delete(usuario)
 
     db.commit()
 
     return HTMLResponse("""
         <h2>Usuário deletado com sucesso</h2>
-        <a href="/usuarios">Voltar</a>
-    """)
-
-
-# ---------------- EDITAR USUARIO ----------------
-@app.get("/editar-usuario/{usuario_id}", response_class=HTMLResponse)
-def editar_usuario(usuario_id: int, db: Session = Depends(get_db)):
-
-    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
-    credencial = db.query(CredenciaisVivo).filter(
-        CredenciaisVivo.usuario_id == usuario_id
-    ).first()
-
-    if not usuario or not credencial:
-        return HTMLResponse("<h2>Usuário não encontrado</h2>")
-
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta charset="UTF-8">
-    <title>Editar Usuário</title>
-    <link rel="stylesheet" href="/static/usuarios.css">
-    </head>
-
-    <body>
-
-    <div class="container">
-
-    <h2>Editar Usuário</h2>
-
-    <form method="post" action="/salvar-edicao/{usuario_id}" style="display:flex;flex-direction:column;gap:25px;background:white;padding:30px;border-radius:16px;width:400px;box-shadow:0 8px 25px rgba(0,0,0,0.08);">
-
-        <label>Nome</label>
-        <input type="text" name="name" value="{usuario.name}">
-
-        <label>CPF</label>
-        <input type="text" name="cpf" value="{usuario.cpf}">
-
-        <label>Email</label>
-        <input type="text" name="email" value="{credencial.email}">
-
-        <label>Senha Vivo</label>
-        <input type="text" name="senha" value="{credencial.senha}">
-
-        <button type="submit" style="background:#0069D9;color:white;padding:10px;border:none;border-radius:8px;">Salvar</button>
-
-    </form>
-
-    <br>
-    <a href="/usuarios">Voltar</a>
-
-    </div>
-
-    </body>
-    </html>
-    """
-
-    return HTMLResponse(html)
-
-
-@app.post("/salvar-edicao/{usuario_id}")
-def salvar_edicao(
-    usuario_id: int,
-    name: str = Form(...),
-    cpf: str = Form(...),
-    email: str = Form(...),
-    senha: str = Form(...),
-    db: Session = Depends(get_db)
-):
-
-    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
-    credencial = db.query(CredenciaisVivo).filter(
-        CredenciaisVivo.usuario_id == usuario_id
-    ).first()
-
-    usuario.name = name
-    usuario.cpf = cpf
-
-    credencial.email = email
-    credencial.senha = senha
-
-    db.commit()
-
-    return HTMLResponse("""
-        <h2>Usuário atualizado com sucesso</h2>
         <a href="/usuarios">Voltar</a>
     """)
 
@@ -324,8 +333,6 @@ def login_usuario(usuario_id: int, request: Request, db: Session = Depends(get_d
 
     try:
 
-        print("Iniciando download da fatura...")
-
         caminho_pdf = baixar_fatura(
             credencial.cpf,
             credencial.senha,
@@ -333,11 +340,7 @@ def login_usuario(usuario_id: int, request: Request, db: Session = Depends(get_d
             pasta
         )
 
-        print("Download finalizado:", caminho_pdf)
-
-    except Exception as e:
-
-        print("ERRO AO BAIXAR FATURA:", e)
+    except Exception:
 
         return templates.TemplateResponse(
             "status.html",
@@ -356,16 +359,26 @@ def login_usuario(usuario_id: int, request: Request, db: Session = Depends(get_d
             {"request": request, "mensagem": "Conta já está paga"}
         )
 
+    empresa = db.query(Empresa).filter(
+        Empresa.usuario_id == usuario_id
+    ).first()
+
+    dados = extrair_dados_fatura(caminho_pdf)
+
     return templates.TemplateResponse(
         "confirmar.html",
         {
             "request": request,
             "pdf": "/faturas/" + os.path.basename(os.path.dirname(caminho_pdf)) + "/" + os.path.basename(caminho_pdf),
             "email": credencial.email,
-            "nome": credencial.name
+            "nome": credencial.name,
+            "valor": dados["valor"],
+            "data": dados["data"],
+            "linha": dados["linha"],
+            "mes": dados["mes"],
+            "empresa": empresa.nome_empresa if empresa else credencial.name
         }
     )
-
 
 # ---------------- ENVIAR EMAIL ----------------
 @app.post("/enviar-email")
@@ -373,25 +386,35 @@ def enviar_email_rota(
     request: Request,
     pdf: str = Form(...),
     email: str = Form(...),
-    nome: str = Form(...)
+    nome: str = Form(...),
+    valor: str = Form(...),
+    data: str = Form(...),
+    linha: str = Form(...),
+    mes: str = Form(...),
+    empresa: str = Form(...),
 ):
 
-    print("PDF recebido:", pdf)
-    print("EMAIL recebido:", email)
-    print("NOME recebido:", nome)
-
-    if not email:
-        return templates.TemplateResponse(
-            "status.html",
-            {
-                "request": request,
-                "mensagem": "Email inválido"
-            }
-        )
+    lista_emails = email.split(",")
 
     caminho = os.path.join(os.getcwd(), pdf.lstrip("/"))
 
-    enviar_email(email, caminho, nome)
+    for e in lista_emails:
+
+        e = e.strip()
+
+        if not e:
+            continue
+
+        enviar_email(
+            e,
+            caminho,
+            nome,
+            valor,
+            data,
+            linha,
+            mes,
+            empresa
+        )
 
     if os.path.exists(caminho):
         os.remove(caminho)
@@ -400,6 +423,6 @@ def enviar_email_rota(
         "status.html",
         {
             "request": request,
-            "mensagem": "Email enviado com sucesso!"
+            "mensagem": "Emailll enviado com sucesso!"
         }
     )
