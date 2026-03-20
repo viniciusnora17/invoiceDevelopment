@@ -331,17 +331,24 @@ def login_usuario(usuario_id: int, request: Request, db: Session = Depends(get_d
 
     pasta = os.path.join("faturas", credencial.cpf)
 
-    try:
+    empresa = db.query(Empresa).filter(
+        Empresa.usuario_id == usuario_id
+    ).first()
 
+    if not empresa:
+        return HTMLResponse("<h2>Empresa não encontrada</h2>")
+
+    try:
         caminho_pdf = baixar_fatura(
             credencial.cpf,
             credencial.senha,
-            credencial.email,
-            pasta
+            credencial.email,  # continua usando o principal aqui (ok)
+            pasta,
+            empresa.cnpj,
+            empresa.nome_empresa
         )
 
     except Exception:
-
         return templates.TemplateResponse(
             "status.html",
             {"request": request, "mensagem": "Erro ao baixar fatura"}
@@ -359,9 +366,12 @@ def login_usuario(usuario_id: int, request: Request, db: Session = Depends(get_d
             {"request": request, "mensagem": "Conta já está paga"}
         )
 
-    empresa = db.query(Empresa).filter(
-        Empresa.usuario_id == usuario_id
-    ).first()
+    # 🔥 PEGAR TODOS OS EMAILS DO BANCO
+    emails = db.query(EmailDestino).filter(
+        EmailDestino.usuario_id == usuario_id
+    ).all()
+
+    lista_emails = ", ".join([e.email for e in emails])
 
     dados = extrair_dados_fatura(caminho_pdf)
 
@@ -370,7 +380,7 @@ def login_usuario(usuario_id: int, request: Request, db: Session = Depends(get_d
         {
             "request": request,
             "pdf": "/faturas/" + os.path.basename(os.path.dirname(caminho_pdf)) + "/" + os.path.basename(caminho_pdf),
-            "email": credencial.email,
+            "email": lista_emails,  # 🔥 AQUI ESTÁ A CORREÇÃO
             "nome": credencial.name,
             "valor": dados["valor"],
             "data": dados["data"],
@@ -379,7 +389,6 @@ def login_usuario(usuario_id: int, request: Request, db: Session = Depends(get_d
             "empresa": empresa.nome_empresa if empresa else credencial.name
         }
     )
-
 # ---------------- ENVIAR EMAIL ----------------
 @app.post("/enviar-email")
 def enviar_email_rota(
@@ -423,6 +432,6 @@ def enviar_email_rota(
         "status.html",
         {
             "request": request,
-            "mensagem": "Emailll enviado com sucesso!"
+            "mensagem": "Email enviado com sucesso!"
         }
     )

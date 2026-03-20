@@ -33,7 +33,7 @@ def enviar_email(destinatario, caminho_pdf):
 # =========================================
 # 🔥 FUNÇÃO PRINCIPAL
 # =========================================
-def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
+def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str, cnpj_empresa: str, nome_empresa: str):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False, slow_mo=100)
@@ -87,19 +87,24 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
 
             page.wait_for_selector("[data-e2e-header-customer-box]", timeout=60000)
 
-            nome_empresa = "ARTUR MARCHI DE SOUZA"
+            print(f"🔍 Empresa alvo: {nome_empresa}")
 
             print("🔍 Verificando empresa atual...")
 
             empresa_atual = page.locator("[data-e2e-header-customer-box]").first.inner_text().strip()
 
-            print("🏢 Empresa atual:", empresa_atual)
+            def limpar_texto(txt):
+                return ' '.join(txt.lower().split())
 
-            empresa_atual_lower = empresa_atual.lower()
-            nome_empresa_lower = nome_empresa.lower()
-            cnpj_limpo = ''.join(filter(str.isdigit, cpf))
+            empresa_atual_limpo = limpar_texto(empresa_atual)
+            nome_empresa_limpo = limpar_texto(nome_empresa)
 
-            if nome_empresa_lower in empresa_atual_lower or cnpj_limpo in empresa_atual:
+            cnpj_limpo = ''.join(filter(str.isdigit, cnpj_empresa))
+            empresa_atual_numeros = ''.join(filter(str.isdigit, empresa_atual))
+
+            print("🏢 Empresa atual (limpo):", empresa_atual_limpo)
+
+            if nome_empresa_limpo == empresa_atual_limpo or cnpj_limpo in empresa_atual_numeros:
                 print("✅ Já está na empresa correta, não precisa trocar")
 
             else:
@@ -119,44 +124,51 @@ def baixar_fatura(cpf: str, senha: str, email: str, pasta_destino: str):
                     cnpj = ''.join(filter(str.isdigit, cnpj))
                     return f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}"
 
-                cnpj_alvo = formatar_cnpj(cpf)
+                cnpj_alvo = formatar_cnpj(cnpj_empresa)
 
                 page.wait_for_selector("[data-customer-select-slider-list]", timeout=30000)
 
                 print(f"🔎 Buscando por nome: {nome_empresa}")
 
-                empresa_bloco = page.locator(
-                    "[data-slide-target]",
-                    has=page.locator("[data-test-company-name]", has_text=nome_empresa)
-                ).first
+                def normalizar(txt):
+                    return ''.join(txt.lower().split())
 
-                if empresa_bloco.count() > 0:
-                    print("✅ Encontrado pelo NOME")
-                    empresa_bloco.locator("[data-test-customer]").first.click()
+                lista_empresas = page.locator("[data-slide-target]")
+                encontrado = False
 
-                else:
-                    print("⚠️ Nome não encontrado, tentando pelo CNPJ...")
+                for i in range(lista_empresas.count()):
+                    bloco = lista_empresas.nth(i)
 
-                    lista = page.locator("[data-test-customer]")
-                    encontrado = False
+                    nome = bloco.locator("[data-test-company-name]").inner_text().strip()
+                    nome_limpo = ''.join(nome.lower().split())
 
-                    for i in range(lista.count()):
-                        texto = lista.nth(i).inner_text().strip()
+                    cnpj = bloco.locator("[data-test-customer]").inner_text().strip()
+                    cnpj_item = ''.join(filter(str.isdigit, cnpj))
 
-                        if cnpj_alvo in texto:
-                            print("✅ Encontrado pelo CNPJ")
-                            lista.nth(i).click()
-                            encontrado = True
-                            break
+                    print(f"🔎 Verificando: {nome} | {cnpj_item}")
 
-                    if not encontrado:
-                        print("⚠️ Não encontrou nada, selecionando primeira empresa")
-                        lista.first.click()
+                    # 🔥 PRIORIDADE 1: CNPJ EXATO
+                    if cnpj_item == cnpj_limpo:
+                        print("✅ MATCH EXATO POR CNPJ")
+                        bloco.locator("[data-test-customer]").click()
+                        encontrado = True
+                        break
+
+                    # 🔥 PRIORIDADE 2: NOME (fallback seguro)
+                    if ''.join(nome_empresa.lower().split()) in nome_limpo:
+                        print("✅ MATCH POR NOME")
+                        bloco.locator("[data-test-customer]").click()
+                        encontrado = True
+                        break
+
+
+                if not encontrado:
+                    print("⚠️ Não encontrou empresa correta — NÃO VOU CLICAR ERRADO")
+                    raise Exception("Empresa não encontrada na lista")
 
                 page.wait_for_load_state("networkidle")
 
                 print("✅ Empresa selecionada")
-
             # =========================================
             # MENU CONTAS
             # =========================================
