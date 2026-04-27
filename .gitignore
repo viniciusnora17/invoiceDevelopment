@@ -1,0 +1,49 @@
+# 🔐 Arquivos sensíveis
+.env
+secret.key
+config.py
+
+# 🗄️ Banco de dados
+*.db
+*.sqlite3
+
+# 🐍 Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 📦 Ambiente virtual
+venv/
+.env/
+.venv/
+
+# 📁 Logs
+*.log
+
+# 📁 Arquivos temporários
+*.tmp
+*.swp
+
+# 🧪 Testes / cache
+.pytest_cache/
+coverage/
+
+# 🧰 IDEs / editores
+.vscode/
+.idea/
+
+# 📦 Build / dist
+build/
+dist/
+*.egg-info/
+
+# 🖼️ Arquivos gerados (se quiser ignorar downloads de faturas)
+faturas/
+
+# 🔑 Playwright (opcional, depende do uso)
+playwright-report/
+test-results/
+
+# 📄 Sistema operacional
+.DS_Store
+Thumbs.db

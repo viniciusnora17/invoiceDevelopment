@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+jinja2
+sqlalchemy
+passlib[bcrypt]
+playwright
+yagmail
+python-dotenv
+pdfplumber
+mysql-connector-python
+cryptography
