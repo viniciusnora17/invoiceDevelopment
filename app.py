@@ -374,7 +374,6 @@ def login_usuario(usuario_id: int, request: Request, db: Session = Depends(get_d
     lista_emails = ", ".join([e.email for e in emails])
 
     dados = extrair_dados_fatura(caminho_pdf)
-
     return templates.TemplateResponse(
         "confirmar.html",
         {

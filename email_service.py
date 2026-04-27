@@ -1,8 +1,13 @@
 import yagmail
+import os
+from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
-EMAIL_REMETENTE = "vnora@everco.com.br"
-SENHA_APP = "jvnr gozp ghin ushl"
+# 🔥 carrega variáveis do .env
+load_dotenv()
+
+EMAIL_REMETENTE = "suporte@everco.com.br"
+SENHA_APP = "ggwe raba rari gmmv"
 
 env = Environment(loader=FileSystemLoader("templates"))
 
@@ -17,6 +22,7 @@ def enviar_email(destinatario, arquivo_pdf, nome, valor, data, linha, mes, empre
         linha=linha,
         mes=mes,
         empresa=empresa
+        
     )
 
     yag = yagmail.SMTP(EMAIL_REMETENTE, SENHA_APP)
